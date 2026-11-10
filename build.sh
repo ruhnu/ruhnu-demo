@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build everything the demo needs from the feat/add-ssh-pk-recipient branches, in dependency order.
+# Build everything the demo needs from the $DEMO_BRANCH branches, in dependency order.
 # Artifacts are installed into the local Maven repository (~/.m2), nothing is deployed.
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 
 for repo in cdoc2-openapi cdoc2-auth cdoc2-java-ref-impl cdoc2-shares-server; do
     branch=$(git -C "$WORKSPACE/$repo" branch --show-current)
-    if [[ "$branch" != "feat/add-ssh-pk-recipient" ]]; then
-        echo "WARNING: $repo is on branch '$branch', not feat/add-ssh-pk-recipient" >&2
+    if [[ "$branch" != "$DEMO_BRANCH" ]]; then
+        echo "WARNING: $repo is on branch '$branch', not $DEMO_BRANCH" >&2
     fi
 done
 

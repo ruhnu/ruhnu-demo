@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stop the demo environment: shares servers, ssh-agent and PostgreSQL containers. Keeps run/ logs.
+# Stop the demo environment: shares servers, ssh-agents, PostgreSQL and DID host containers. Keeps run/ logs.
 set -uo pipefail
 source "$(dirname "$0")/env.sh"
 
@@ -16,6 +16,12 @@ for server in "${SERVERS[@]}"; do
     rm -f "$RUN_DIR/$name.pid"
     docker rm -f "ruhnu-demo-db-$pg_port" >/dev/null 2>&1 && echo "removed ruhnu-demo-db-$pg_port"
 done
+
+docker rm -f "$DID_HOST_CONTAINER" >/dev/null 2>&1 && echo "removed $DID_HOST_CONTAINER"
+if [[ -f "$RUN_DIR/mallory-agent.env" ]]; then
+    (source "$RUN_DIR/mallory-agent.env" >/dev/null && ssh-agent -k >/dev/null 2>&1) && echo "stopped Mallory's ssh-agent"
+    rm -f "$RUN_DIR/mallory-agent.env" "$RUN_DIR/mallory.sock" "$RUN_DIR/mallory" "$RUN_DIR/mallory.pub"
+fi
 
 if [[ -f "$RUN_DIR/agent.env" ]]; then
     # shellcheck disable=SC1091
