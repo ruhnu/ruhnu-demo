@@ -7,7 +7,8 @@ End-to-end demo of CDOC2 SSH key recipients, run locally:
   (OpenSpec change `add-ssh-pk-recipient`, tasks 6.1–6.3).
 - **DID recipients (`ruhnu/did/`)**: encrypt to the SSH keys a `did:web` DID document lists, revoke by removing
   the key from the document, survive a DID host outage, and show that a key a compromised DID host adds can't
-  open an existing container (OpenSpec change `add-did-recipient`, tasks 6.1–6.6).
+  open an existing container (OpenSpec change `add-did-recipient`, tasks 6.1–6.6: `up.sh` starts the DID host
+  (6.1), `did.sh` runs 6.2–6.5, and `demo.sh` and `revoke.sh` are the phase 1 regression check of 6.6).
 
 ## What runs
 

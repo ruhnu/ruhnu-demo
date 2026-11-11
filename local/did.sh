@@ -79,6 +79,10 @@ expect_decrypted "$DEMO_AGENT_SOCK" "decrypted again after the DID host is back"
 
 step "compromised DID host: Mallory's key added to the DID document"
 mallory_sock="$RUN_DIR/mallory.sock"
+# stop Mallory's agent from an earlier run, otherwise every run leaves one behind
+if [[ -f "$RUN_DIR/mallory-agent.env" ]]; then
+    (source "$RUN_DIR/mallory-agent.env" >/dev/null && ssh-agent -k >/dev/null 2>&1) || true
+fi
 rm -f "$mallory_sock" "$RUN_DIR/mallory" "$RUN_DIR/mallory.pub"
 ssh-agent -a "$mallory_sock" </dev/null >"$RUN_DIR/mallory-agent.env" 2>/dev/null
 ssh-keygen -q -t ecdsa -b 256 -N '' -C "mallory" -f "$RUN_DIR/mallory"
