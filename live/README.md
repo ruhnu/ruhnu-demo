@@ -3,6 +3,10 @@
 Encrypt a file to an SSH key and decrypt it through `ssh-agent`, using the two live shares servers and the
 published CLI image `ghcr.io/ruhnu/ruhnu-cli`. Nothing is built or run locally apart from `docker run`.
 
+**The live servers are for demos only: don't encrypt real secrets with them.** Both are run by the same
+organisation, so the split across servers protects nothing yet, and they come with no availability or backup
+guarantees.
+
 For the local stack with its own servers (expiry and revocation scripts), see [../local/README.md](../local/README.md).
 
 ## What's used
