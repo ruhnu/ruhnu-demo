@@ -14,7 +14,7 @@ For the local stack with its own servers (expiry and revocation scripts), see [.
 | Component | Where |
 |---|---|
 | shares server 1 | `https://share1-ruhnu.duckdns.org`, Oracle Cloud, run by the Ruhnu team |
-| shares server 2 | `https://share2-ruhnu.cyber.ee`, on-prem OpenStack at cyber.ee, run by the on-prem admin |
+| shares server 2 | `https://share2-ruhnu.cyber.ee`, on-prem OpenStack at cyber.ee, run by the Ruhnu team |
 | CLI | `ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1` (OpenSpec change `add-cli-container-image`) |
 | `ssh-agent` | yours, its socket mounted into the container for decryption |
 
@@ -121,8 +121,8 @@ ruhnu decrypt --ssh-agent -f short.cdoc2 -o out      # refused: the shares have 
 ## Revocation is not tested here
 
 Revoking access before the shares expire means deleting the recipient's share on at least one server, in its
-database. On the live servers that's an admin operation (share2's admin does it on request, see
-ruhnu-ops), with no self-service API, so it is not part of this walkthrough. The local stack shows it:
+database. On the live servers only the Ruhnu team, which runs both, can do that; there is no
+self-service API, so it is not part of this walkthrough. The local stack shows it:
 `../local/revoke.sh`.
 
 Self-service revocation is the follow-up: the OpenSpec change `add-did-recipient` binds a recipient to a
