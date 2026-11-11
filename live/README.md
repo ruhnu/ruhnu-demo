@@ -124,28 +124,75 @@ ruhnu decrypt --ssh-agent -f short.cdoc2 -o out      # refused: the shares have 
 
 ## 4. DID recipients: revoke by editing a document
 
-A DID recipient is the set of keys a `did:web` DID document lists under `authentication`. `create --did`
-fetches the document and pins each listed P-256 key by its fingerprint. On every decryption, each server
-fetches the document again and releases its share only while the key is still listed. Removing the key from
-the document therefore revokes access on both servers, without the Ruhnu team. A compromised DID host can
-withdraw access, but can't add a key that opens existing containers.
+### What a DID is
 
-**Publish a DID document** on an allowed host. The servers accept only `jann0k.github.io` and
-`ruhnu.github.io`; ask the Ruhnu team for a path on `ruhnu.github.io`, such as
-`did:web:ruhnu.github.io:alice`, served from `https://ruhnu.github.io/alice/did.json`. A DID without a path,
-such as `did:web:jann0k.github.io`, is served from `/.well-known/did.json`; on GitHub Pages, a `.well-known`
-directory needs an empty `.nojekyll` file at the root of the site. `../local/make-did-json.py` writes the
-document from your `.pub` file:
+A DID ([Decentralized Identifier](https://www.w3.org/TR/did-core/)) is an identifier you control that points
+to a small JSON file, the *DID document*, listing your public keys. A `did:web` DID
+([method spec](https://w3c-ccg.github.io/did-method-web/)) is the simplest kind: it is a web address, and the
+document is a file on a website you control. Colons after the host name become path segments, and a DID
+without a path uses `/.well-known/did.json`:
 
-```shell
-python3 ../local/make-did-json.py did:web:ruhnu.github.io:alice ~/.ssh/id_ecdsa_cdoc2.pub > did.json
-```
+| DID | DID document |
+|---|---|
+| `did:web:alice.github.io` | `https://alice.github.io/.well-known/did.json` |
+| `did:web:ruhnu.github.io:alice` | `https://ruhnu.github.io/alice/did.json` |
 
-To match the document with `ssh-add -l`, you can name each key after its fingerprint, for example
-`"id": "did:web:ruhnu.github.io:alice#SHA256:…"` in `verificationMethod` and in `authentication`. The id is
-only a label: the fingerprint that counts is computed from the key, and printed by `create`.
+**Why use one here.** You encrypt to a DID instead of to a `.pub` line. `create --did` fetches the DID
+document and pins each P-256 key listed under `authentication` by its fingerprint. On every decryption, each
+shares server fetches the document again and releases its share only while the key is still listed. So you
+revoke access yourself, on both servers at once, by removing the key from the document; no one has to delete
+shares on the servers. Whoever controls the website can withdraw access, but can't add a key that opens
+existing containers, because those pin the fingerprint.
 
-**Encrypt, inspect, decrypt** (the DID is the one from your document):
+### Which DID hosts the live servers accept
+
+The servers fetch DID documents only from hosts on their allowlist, so that nobody can make them send
+requests to arbitrary sites. Today that is `jann0k.github.io` and `ruhnu.github.io`. Until your own host is
+allowed, ask the Ruhnu team for a path on `ruhnu.github.io` (`did:web:ruhnu.github.io:<you>`). Allowing every
+`*.github.io` site, so that anyone can use their own GitHub Pages site, is implemented on cdoc2-shares-server
+branch `feat/did-wildcard-hosts` but not deployed yet.
+
+### Publish a DID document on GitHub Pages
+
+[GitHub Pages](https://docs.github.com/en/pages/quickstart) serves the files of a repository as a website. A
+repository named `<username>.github.io` is served at `https://<username>.github.io`, so your DID is
+`did:web:<username>.github.io`. A working example, serving `did:web:jann0k.github.io`:
+[jann0k/jann0k.github.io](https://github.com/jann0k/jann0k.github.io/tree/main).
+
+1. Create a public repository named exactly `<username>.github.io`, as in GitHub's
+   [Creating a GitHub Pages site](https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site).
+   Under *Settings → Pages*, the source should be *Deploy from a branch*, branch `main`, folder `/ (root)`.
+2. Clone it, and make Pages publish the `.well-known` directory. By default Pages builds the site with Jekyll,
+   which [skips files and directories that start with a dot](https://docs.github.com/en/pages/setting-up-a-github-pages-site-with-jekyll/about-github-pages-and-jekyll).
+   Either add a `_config.yml` containing `include: [".well-known"]`, as the example does, or an empty
+   `.nojekyll` file, which turns Jekyll off.
+3. Write the DID document from your public key with `make-did-json.py` from this repository's `local/`
+   directory (with the local demo; it reaches `main` when the DID demo is merged):
+
+   ```shell
+   cd <username>.github.io
+   mkdir -p .well-known
+   python3 ~/workspace/ruhnu-workspace/ruhnu-demo/local/make-did-json.py \
+     did:web:<username>.github.io ~/.ssh/id_ecdsa_cdoc2.pub > .well-known/did.json
+   ```
+
+   It lists each key as a `JsonWebKey2020` with its P-256 coordinates under `authentication`. To find the key
+   in the document by the fingerprint `ssh-add -l` shows, you can rename its id from `#key-0` to
+   `#SHA256:<fingerprint>`, in `verificationMethod` and in `authentication`, as the example does. The id is
+   only a label: what counts is the fingerprint computed from the key, which `create` prints.
+4. Commit and push. Pages deploys within about a minute (the repository's *Actions* tab shows a
+   *pages build and deployment* run). Then check that the document is served:
+
+   ```shell
+   curl -s https://<username>.github.io/.well-known/did.json
+   ```
+
+For a DID with a path, such as `did:web:ruhnu.github.io:alice`, put the file at `alice/did.json` instead; no
+dot directory is involved.
+
+### Encrypt, inspect, decrypt
+
+Use the DID from your document:
 
 ```shell
 ruhnu create --did did:web:ruhnu.github.io:alice -f did.cdoc2 secret.env
@@ -160,7 +207,9 @@ rm -rf out && mkdir out && ruhnu decrypt --ssh-agent -f did.cdoc2 -o out
 - `info` shows `SSH key via DID: … DID did:web:…, key SHA256:…`.
 - `--did` is repeatable and combines with `--ssh-pubkey`.
 
-**Revoke and restore.** Set `"authentication": []` in the document and publish it. Once GitHub Pages serves the
+### Revoke and restore
+
+Set `"authentication": []` in the document, then commit and push it. Once GitHub Pages serves the
 new version, usually within a minute, decryption is refused by both servers:
 
 ```
@@ -170,7 +219,9 @@ ERROR: Shares server https://share1-ruhnu.duckdns.org refused share ID …: the 
 Put the key back and publish again, and decryption works again. Containers pin fingerprints, so a key you
 rotate away must stay listed until the containers encrypted to it are re-encrypted.
 
-**DID host outage.** If a server can't reach the DID host, decryption fails with
+### DID host outage
+
+If a server can't reach the DID host, decryption fails with
 `Shares server … could not reach the DID host of did:web:…; try again later` (503), and works again once the
 host is reachable. The Ruhnu team can simulate this on a server for demos.
 
