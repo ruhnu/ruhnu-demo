@@ -14,7 +14,7 @@ For the local stack with its own servers (expiry and revocation scripts), see [.
 | Component | Where |
 |---|---|
 | shares server 1 | `https://share1-ruhnu.duckdns.org`, Oracle Cloud, run by the Ruhnu team |
-| shares server 2 | `https://share2-ruhnu.cyber.ee`, on-prem OpenStack at cyber.ee, run by the Ruhnu team |
+| shares server 2 | `https://share2-ruhnu.cyber.ee`, run by the Ruhnu team |
 | CLI | `ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1` (OpenSpec change `add-cli-container-image`) |
 | `ssh-agent` | yours, its socket mounted into the container for decryption |
 
