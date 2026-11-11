@@ -2,7 +2,7 @@
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # repositories are expected next to ruhnu-demo, on branch feat/add-ssh-pk-recipient
-WORKSPACE="${WORKSPACE:-$(cd "$DEMO_DIR/.." && pwd)}"
+WORKSPACE="${WORKSPACE:-$(cd "$DEMO_DIR/../.." && pwd)}"
 SHARES_SERVER_REPO="$WORKSPACE/cdoc2-shares-server"
 REF_IMPL_REPO="$WORKSPACE/cdoc2-java-ref-impl"
 
