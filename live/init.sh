@@ -10,7 +10,7 @@
 # Environment, read when sourcing:
 #   RUHNU_CONFIG_DIR  configuration directory (default live/config, next to this script), for example
 #                     RUHNU_CONFIG_DIR=~/.config/cdoc2 source live/init.sh
-#   RUHNU_CLI_IMAGE   CLI image (default ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1)
+#   RUHNU_CLI_IMAGE   CLI image (default ghcr.io/ruhnu/ruhnu-cli:dev-did-1)
 # Sourced into your shell, so no `set -e`: errors return instead of exiting.
 #
 # The values are copied to _RUHNU_CONFIG_DIR and _RUHNU_CLI_IMAGE, which `ruhnu` uses: bash undoes a
@@ -22,7 +22,7 @@ case "$_RUHNU_CONFIG_DIR" in
     /*) ;;
     *) _RUHNU_CONFIG_DIR="$PWD/$_RUHNU_CONFIG_DIR" ;;
 esac
-_RUHNU_CLI_IMAGE="${RUHNU_CLI_IMAGE:-ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1}"
+_RUHNU_CLI_IMAGE="${RUHNU_CLI_IMAGE:-ghcr.io/ruhnu/ruhnu-cli:dev-did-1}"
 export _RUHNU_CONFIG_DIR _RUHNU_CLI_IMAGE
 
 _ruhnu_init() {

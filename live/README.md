@@ -1,7 +1,8 @@
 # Live servers with the CLI image
 
-Encrypt a file to an SSH key and decrypt it through `ssh-agent`, using the two live shares servers and the
-published CLI image `ghcr.io/ruhnu/ruhnu-cli`. Nothing is built or run locally apart from `docker run`.
+Encrypt a file to an SSH key, or to the keys a `did:web` DID document lists, and decrypt it through
+`ssh-agent`, using the two live shares servers and the published CLI image `ghcr.io/ruhnu/ruhnu-cli`. Nothing
+is built or run locally apart from `docker run`.
 
 **The live servers are for demos only: don't encrypt real secrets with them.** Both are run by the same
 organisation, so the split across servers protects nothing yet, and they come with no availability or backup
@@ -15,12 +16,15 @@ For the local stack with its own servers (expiry and revocation scripts), see [.
 |---|---|
 | shares server 1 | `https://share1-ruhnu.duckdns.org`, Oracle Cloud, run by the Ruhnu team |
 | shares server 2 | `https://share2-ruhnu.cyber.ee`, run by the Ruhnu team |
-| CLI | `ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1` (OpenSpec change `add-cli-container-image`) |
+| CLI | `ghcr.io/ruhnu/ruhnu-cli:dev-did-1` (OpenSpec changes `add-cli-container-image` and `add-did-recipient`) |
 | `ssh-agent` | yours, its socket mounted into the container for decryption |
+| DID hosts | `jann0k.github.io` and `ruhnu.github.io` (GitHub Pages), for DID recipients |
 
-Both servers run image tag `dev-ssh-pk-1` with SSH public key recipients enabled. `ruhnu/pk/` shares live
-14 days by default and at most; a shorter lifetime can be requested with `--share-expiry`. Both servers have
-Let's Encrypt certificates.
+Both servers run image tag `dev-did-1` with SSH public key and DID recipients enabled, and allow DIDs on
+`jann0k.github.io` and `ruhnu.github.io` only (`RUHNU_DID_ALLOWED_HOSTS=jann0k.github.io,ruhnu.github.io`).
+`ruhnu/pk/` shares live 14 days by default and at most; `ruhnu/did/` shares 3 years by default and at most 5,
+since access to them can be revoked through the DID document. A shorter lifetime can be requested with
+`--share-expiry`. Both servers have Let's Encrypt certificates.
 
 There is no `:latest` image yet: it's published only for `v*` tags, and so far there are only `dev-*` tags.
 
@@ -56,7 +60,7 @@ source ~/workspace/ruhnu-workspace/ruhnu-demo/live/init.sh
   at `/work`, `live/config` at `/config`, and your agent socket at `/ssh-agent.sock` when `SSH_AUTH_SOCK` is
   set. It's the function from `cdoc2-cli/README-ruhnu.md` in cdoc2-java-ref-impl, with the configuration
   directory changed.
-- The image is `RUHNU_CLI_IMAGE`, `ghcr.io/ruhnu/ruhnu-cli:dev-cli-image-1` unless set before sourcing.
+- The image is `RUHNU_CLI_IMAGE`, `ghcr.io/ruhnu/ruhnu-cli:dev-did-1` unless set before sourcing.
 - The configuration directory is `RUHNU_CONFIG_DIR`, `live/config` unless set before sourcing. For a
   configuration that stays outside the repository:
 
@@ -118,16 +122,64 @@ sleep 330
 ruhnu decrypt --ssh-agent -f short.cdoc2 -o out      # refused: the shares have expired
 ```
 
-## Revocation is not tested here
+## 4. DID recipients: revoke by editing a document
 
-Revoking access before the shares expire means deleting the recipient's share on at least one server, in its
-database. On the live servers only the Ruhnu team, which runs both, can do that; there is no
-self-service API, so it is not part of this walkthrough. The local stack shows it:
-`../local/revoke.sh`.
+A DID recipient is the set of keys a `did:web` DID document lists under `authentication`. `create --did`
+fetches the document and pins each listed P-256 key by its fingerprint. On every decryption, each server
+fetches the document again and releases its share only while the key is still listed. Removing the key from
+the document therefore revokes access on both servers, without the Ruhnu team. A compromised DID host can
+withdraw access, but can't add a key that opens existing containers.
 
-Self-service revocation is the follow-up: the OpenSpec change `add-did-recipient` binds a recipient to a
-DID document, and removing the key from the document revokes access at once on every server. It will be
-tested against the live servers once it is deployed there.
+**Publish a DID document** on an allowed host. The servers accept only `jann0k.github.io` and
+`ruhnu.github.io`; ask the Ruhnu team for a path on `ruhnu.github.io`, such as
+`did:web:ruhnu.github.io:alice`, served from `https://ruhnu.github.io/alice/did.json`. A DID without a path,
+such as `did:web:jann0k.github.io`, is served from `/.well-known/did.json`; on GitHub Pages, a `.well-known`
+directory needs an empty `.nojekyll` file at the root of the site. `../local/make-did-json.py` writes the
+document from your `.pub` file:
+
+```shell
+python3 ../local/make-did-json.py did:web:ruhnu.github.io:alice ~/.ssh/id_ecdsa_cdoc2.pub > did.json
+```
+
+To match the document with `ssh-add -l`, you can name each key after its fingerprint, for example
+`"id": "did:web:ruhnu.github.io:alice#SHA256:…"` in `verificationMethod` and in `authentication`. The id is
+only a label: the fingerprint that counts is computed from the key, and printed by `create`.
+
+**Encrypt, inspect, decrypt** (the DID is the one from your document):
+
+```shell
+ruhnu create --did did:web:ruhnu.github.io:alice -f did.cdoc2 secret.env
+#   Pinned ruhnu/did/did:web:ruhnu.github.io:alice/hash/… (SHA256:…)   <- check it against ssh-add -l
+ruhnu info -f did.cdoc2
+rm -rf out && mkdir out && ruhnu decrypt --ssh-agent -f did.cdoc2 -o out
+```
+
+- `create` trusts the DID host at that moment: check the pinned fingerprints it prints. It fetches the document
+  with the CA certificates of the image's Java, not with `live/config/truststore.jks`, which is only for the
+  shares servers.
+- `info` shows `SSH key via DID: … DID did:web:…, key SHA256:…`.
+- `--did` is repeatable and combines with `--ssh-pubkey`.
+
+**Revoke and restore.** Set `"authentication": []` in the document and publish it. Once GitHub Pages serves the
+new version, usually within a minute, decryption is refused by both servers:
+
+```
+ERROR: Shares server https://share1-ruhnu.duckdns.org refused share ID …: the share was not found, has expired, or the key is no longer listed in the DID document of did:web:ruhnu.github.io:alice
+```
+
+Put the key back and publish again, and decryption works again. Containers pin fingerprints, so a key you
+rotate away must stay listed until the containers encrypted to it are re-encrypted.
+
+**DID host outage.** If a server can't reach the DID host, decryption fails with
+`Shares server … could not reach the DID host of did:web:…; try again later` (503), and works again once the
+host is reachable. The Ruhnu team can simulate this on a server for demos.
+
+## Revoking SSH key recipients
+
+Revoking a `ruhnu/pk/` recipient before its shares expire means deleting its share on at least one server, in
+the database. On the live servers only the Ruhnu team, which runs both, can do that; there is no
+self-service API, so it is not part of this walkthrough. The local stack shows it: `../local/revoke.sh`.
+For self-service revocation, use a DID recipient (section 4).
 
 ## Verified
 
@@ -136,3 +188,12 @@ tested against the live servers once it is deployed there.
 agent, against share1 and share2. The decrypted file matched and was owned by the host user. After the 10 minutes,
 decryption was refused: `Shares server https://share1-ruhnu.duckdns.org refused nonce for share ID …: share
 not found (expired or deleted)`.
+
+2026-11-11, with both servers and the CLI on `dev-did-1`:
+- From the ruhnu sandbox: the servers refuse an unknown `ruhnu/` recipient kind and a DID on a host that is not
+  allowed (`400`). `create --did did:web:jann0k.github.io` pinned the listed key and `info` showed it. An agent
+  with another key got `No matching key found in ssh-agent`, and a validly signed DID token for that other key
+  was refused by both servers (`404`, `../local/AttackerFetch.java`). The same SSH public key round trip as
+  above passed with `dev-did-1`.
+- From a laptop with the listed key: `decrypt --ssh-agent` worked, and failed with `could not reach the DID
+  host` (`503`, naming share2) while share2 was cut off from the DID host.
