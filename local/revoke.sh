@@ -35,7 +35,8 @@ if cdoc2 decrypt -f "$work/secret.cdoc2" --ssh-agent -o "$work/out2" \
     "-Dkey-shares.properties=$KEY_SHARES_PROPERTIES" >"$work/revoked.out" 2>&1; then
     fail "decryption succeeded after revocation"
 fi
-message=$(grep -m1 "refused nonce" "$work/revoked.out" | sed 's/.*Exception: //')
+message=$(grep -m1 "refused share ID" "$work/revoked.out" | sed 's/^ERROR: //') \
+    || { cat "$work/revoked.out" >&2; fail "decryption failed, but not because the share was refused"; }
 echo "$message"
 [[ "$message" == *"https://localhost:$revoking_port"* ]] || fail "error does not name $revoking_name"
 ok "decryption refused, $revoking_name (https://localhost:$revoking_port) named as the refusing server"

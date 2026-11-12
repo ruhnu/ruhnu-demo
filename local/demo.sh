@@ -57,7 +57,8 @@ if cdoc2 decrypt -f "$work/secret.cdoc2" --ssh-agent -o "$work/out2" \
     "-Dkey-shares.properties=$KEY_SHARES_PROPERTIES" >"$work/expired.out" 2>&1; then
     fail "decryption succeeded after expiry"
 fi
-grep -m1 "refused nonce" "$work/expired.out" | sed 's/.*Exception: //'
+grep -m1 "refused share ID" "$work/expired.out" | sed 's/^ERROR: //' \
+    || { cat "$work/expired.out" >&2; fail "decryption failed, but not because the share was refused"; }
 ok "decryption refused after expiry"
 
 for server in "${SERVERS[@]}"; do
