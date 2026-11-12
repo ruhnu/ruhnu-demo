@@ -16,17 +16,18 @@ For the local stack with its own servers (expiry and revocation scripts), see [.
 |---|---|
 | shares server 1 | `https://share1-ruhnu.duckdns.org`, Oracle Cloud, run by the Ruhnu team |
 | shares server 2 | `https://share2-ruhnu.cyber.ee`, run by the Ruhnu team |
-| CLI | `ghcr.io/ruhnu/ruhnu-cli:dev-did-1` (OpenSpec changes `add-cli-container-image` and `add-did-recipient`) |
+| CLI | `ghcr.io/ruhnu/ruhnu-cli:latest` (OpenSpec changes `add-cli-container-image` and `add-did-recipient`) |
 | `ssh-agent` | yours, its socket mounted into the container for decryption |
-| DID hosts | `jann0k.github.io` and `ruhnu.github.io` (GitHub Pages), for DID recipients |
+| DID hosts | any `<username>.github.io` (GitHub Pages), for DID recipients |
 
-Both servers run image tag `dev-did-1` with SSH public key and DID recipients enabled, and allow DIDs on
-`jann0k.github.io` and `ruhnu.github.io` only (`RUHNU_DID_ALLOWED_HOSTS=jann0k.github.io,ruhnu.github.io`).
+Both servers run image tag `v-ruhnu-demo-1` with SSH public key and DID recipients enabled, and allow DIDs on
+any GitHub Pages site (`RUHNU_DID_ALLOWED_HOSTS=*.github.io`).
 `ruhnu/pk/` shares live 14 days by default and at most; `ruhnu/did/` shares 3 years by default and at most 5,
 since access to them can be revoked through the DID document. A shorter lifetime can be requested with
 `--share-expiry`. Both servers have Let's Encrypt certificates.
 
-There is no `:latest` image yet: it's published only for `v*` tags, and so far there are only `dev-*` tags.
+`:latest` is the newest `v*` tag, currently `v-ruhnu-demo-1`. For an exact version, set `RUHNU_CLI_IMAGE`
+(section 1), for example to `ghcr.io/ruhnu/ruhnu-cli:v-ruhnu-demo-1`.
 
 ## Prerequisites
 
@@ -60,7 +61,7 @@ source ~/workspace/ruhnu-workspace/ruhnu-demo/live/init.sh
   at `/work`, `live/config` at `/config`, and your agent socket at `/ssh-agent.sock` when `SSH_AUTH_SOCK` is
   set. It's the function from `cdoc2-cli/README-ruhnu.md` in cdoc2-java-ref-impl, with the configuration
   directory changed.
-- The image is `RUHNU_CLI_IMAGE`, `ghcr.io/ruhnu/ruhnu-cli:dev-did-1` unless set before sourcing.
+- The image is `RUHNU_CLI_IMAGE`, `ghcr.io/ruhnu/ruhnu-cli:latest` unless set before sourcing.
 - The configuration directory is `RUHNU_CONFIG_DIR`, `live/config` unless set before sourcing. For a
   configuration that stays outside the repository:
 
@@ -147,10 +148,9 @@ existing containers, because those pin the fingerprint.
 ### Which DID hosts the live servers accept
 
 The servers fetch DID documents only from hosts on their allowlist, so that nobody can make them send
-requests to arbitrary sites. Today that is `jann0k.github.io` and `ruhnu.github.io`. Until your own host is
-allowed, ask the Ruhnu team for a path on `ruhnu.github.io` (`did:web:ruhnu.github.io:<you>`). Allowing every
-`*.github.io` site, so that anyone can use their own GitHub Pages site, is implemented on cdoc2-shares-server
-branch `feat/did-wildcard-hosts` but not deployed yet.
+requests to arbitrary sites. The live servers allow `*.github.io`, so anyone can use their own GitHub Pages
+site, `did:web:<username>.github.io`, as described below. The wildcard matches exactly one label:
+`alice.github.io`, but not `a.b.github.io`. For a DID on another host, ask the Ruhnu team.
 
 ### Publish a DID document on GitHub Pages
 
@@ -167,7 +167,7 @@ repository named `<username>.github.io` is served at `https://<username>.github.
    Either add a `_config.yml` containing `include: [".well-known"]`, as the example does, or an empty
    `.nojekyll` file, which turns Jekyll off.
 3. Write the DID document from your public key with `make-did-json.py` from this repository's `local/`
-   directory (with the local demo; it reaches `main` when the DID demo is merged):
+   directory:
 
    ```shell
    cd <username>.github.io
@@ -248,3 +248,9 @@ not found (expired or deleted)`.
   above passed with `dev-did-1`.
 - From a laptop with the listed key: `decrypt --ssh-agent` worked, and failed with `could not reach the DID
   host` (`503`, naming share2) while share2 was cut off from the DID host.
+
+2026-11-12, with the CLI on `:latest`:
+- From the ruhnu sandbox: the SSH public key round trip passed against share1 and share2, and
+  `create --did did:web:jann0k.github.io` was accepted by both servers and pinned the listed key.
+- With share2 on `v-ruhnu-demo-1` and `*.github.io` allowed: share2 cut off from `jann0k.github.io` and
+  reconnected again, as for `dev-did-1`.
