@@ -150,7 +150,7 @@ existing containers, because those pin the fingerprint.
 The servers fetch DID documents only from hosts on their allowlist, so that nobody can make them send
 requests to arbitrary sites. The live servers allow `*.github.io`, so anyone can use their own GitHub Pages
 site, `did:web:<username>.github.io`, as described below. The wildcard matches exactly one label:
-`alice.github.io`, but not `a.b.github.io`. For a DID on another host, ask the Ruhnu team.
+`alice.github.io`, but not `a.b.github.io`. DIDs on other hosts are not supported on the live servers.
 
 ### Publish a DID document on GitHub Pages
 
@@ -209,21 +209,77 @@ rm -rf out && mkdir out && ruhnu decrypt --ssh-agent -f did.cdoc2 -o out
 
 ### Revoke and restore
 
-Set `"authentication": []` in the document, then commit and push it. Once GitHub Pages serves the
-new version, usually within a minute, decryption is refused by both servers:
+Access is revoked per key: a container encrypted to a DID pins each key the document listed at that moment,
+and each pinned key opens it only while the document still lists that key under `authentication`.
+
+- To revoke one key, for example a lost laptop's, delete its entry from `authentication` and from
+  `verificationMethod`. Containers stay decryptable with the other keys they pinned.
+- To revoke everything at once, set `"authentication": []`.
+
+Then commit and push. Nothing changes on the servers and no admin is involved: every server fetches the
+document on every decryption, with no cache. Once GitHub Pages serves the new version, usually within a
+minute, decryption with the removed key is refused by both servers:
 
 ```
 ERROR: Shares server https://share1-ruhnu.duckdns.org refused share ID …: the share was not found, has expired, or the key is no longer listed in the DID document of did:web:ruhnu.github.io:alice
 ```
 
 Put the key back and publish again, and decryption works again. Containers pin fingerprints, so a key you
-rotate away must stay listed until the containers encrypted to it are re-encrypted.
+rotate away must stay listed until the containers encrypted to it are re-encrypted. Adding a new key to the
+document doesn't open existing containers; it is used for containers encrypted after it was added.
+
+Check the result with `curl -s https://<username>.github.io/.well-known/did.json`, then with `decrypt`.
 
 ### DID host outage
 
 If a server can't reach the DID host, decryption fails with
 `Shares server … could not reach the DID host of did:web:…; try again later` (503), and works again once the
 host is reachable. The Ruhnu team can simulate this on a server for demos.
+
+## 5. From a remote host: forward your agent
+
+To use `ruhnu` on another machine, such as a VM you log in to, while the key stays on your laptop, forward
+your agent with `ssh -A`. The remote `ruhnu` then signs through your laptop's agent. Add the key with
+confirmation (`ssh-add -c`), so that every signature shows a dialog on your laptop: while you're logged in,
+root on the remote host can use the forwarded agent too, and the dialog is how you notice.
+
+On the laptop (Ubuntu; `ssh-askpass` shows the dialog):
+
+```shell
+sudo apt install ssh-askpass-gnome
+eval $(ssh-agent)                      # OpenSSH's agent, in this terminal only
+ssh-add -c ~/.ssh/id_ecdsa_cdoc2
+ssh-add -c ~/.ssh/id_ed25519           # your GitHub key, if it's another one: for the test below
+ssh -T git@github.com                  # dialog appears → "Hi <user>! ..."
+ssh -A <user>@<remote host>
+```
+
+GNOME's own agent refuses to sign with keys added by `ssh-add -c` (section 2), hence the separate agent. It
+lives as long as the terminal does; `ssh-agent -k` stops it earlier.
+
+`ssh -T git@github.com` tests the setup with the SSH key most people already have on GitHub: the dialog
+appears on the laptop and GitHub greets you. Your GitHub key can be of any type; only the key for `ruhnu`
+must be ECDSA P-256.
+
+On the remote host, which needs Docker and this repository:
+
+```shell
+ssh-add -l                             # lists your laptop's keys through the forwarded agent
+ssh -T git@github.com                  # dialog on the laptop → "Hi <user>! ...": forwarding works
+source ~/ruhnu-demo/live/init.sh       # where you cloned ruhnu-demo
+ruhnu create --ssh-pubkey "$(ssh-add -L | grep -m1 ecdsa-sha2-nistp256)" -f secret.cdoc2 secret.env
+mkdir -p out && ruhnu decrypt --ssh-agent -f secret.cdoc2 -o out   # confirm on the laptop, once per server
+```
+
+DID recipients (`did:web:<username>.github.io`) work the same way. Notes:
+
+- Forward your agent only to hosts you trust, and only for the session (`ssh -A`), not with `ForwardAgent yes`
+  under `Host *`.
+- Don't use `sudo` for `ruhnu` or `docker` on the remote host: `sudo` drops `SSH_AUTH_SOCK`. Your user needs
+  to be in the `docker` group.
+- The forwarded agent exists only while you're logged in. In `tmux` or `screen` sessions started in an
+  earlier login, `SSH_AUTH_SOCK` points to an old socket: `ssh-add -l` then fails with
+  `Could not open a connection to your authentication agent`.
 
 ## Revoking SSH key recipients
 
