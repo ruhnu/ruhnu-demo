@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Encrypts and decrypts this repository's secrets with the ruhnu-cli image. Needs only Docker.
+#
+#   ./ruhnu decrypt   secret.env.cdoc2 -> secret.env, signing through your ssh-agent (SSH_AUTH_SOCK)
+#   ./ruhnu encrypt   secret.env -> secret.env.cdoc2, for the recipients listed in ./recipients
+#   ./ruhnu info      shows the recipients of secret.env.cdoc2
+#
+# secret.env is ignored by git; commit secret.env.cdoc2.
+#
+# Environment:
+#   RUHNU_CLI_IMAGE   CLI image (default ghcr.io/ruhnu/ruhnu-cli:latest)
+#   RUHNU_CONFIG_DIR  directory with key-shares.properties and its truststore, mounted at /config, to use other
+#                     shares servers than share1 and share2 (see ruhnu-cli/cli.sh)
+set -euo pipefail
+cd "$(dirname "$0")"
+
+image="${RUHNU_CLI_IMAGE:-ghcr.io/ruhnu/ruhnu-cli:latest}"
+
+die() {
+    echo "ruhnu: $*" >&2
+    exit 1
+}
+
+# runs cdoc2-cli as you, with this directory at /toy and your ssh-agent socket
+cli() {
+    local opts=(--rm --user "$(id -u):$(id -g)" -v "$PWD:/toy" -w /toy --entrypoint sh)
+    if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+        opts+=(-v "$SSH_AUTH_SOCK:/ssh-agent.sock" -e SSH_AUTH_SOCK=/ssh-agent.sock)
+    fi
+    if [ -n "${RUHNU_CONFIG_DIR:-}" ]; then
+        opts+=(-v "$(cd "$RUHNU_CONFIG_DIR" && pwd):/config:ro")
+    fi
+    docker run "${opts[@]}" "$image" /toy/ruhnu-cli/cli.sh "$@"
+}
+
+# ./recipients -> --did / --ssh-pubkey options, in the array "recipient_opts"
+read_recipients() {
+    recipient_opts=()
+    local line
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+        case "$line" in
+            '' | '#'*) ;;
+            did:*) recipient_opts+=(--did "$line") ;;
+            ecdsa-sha2-nistp256\ *) recipient_opts+=(--ssh-pubkey "$line") ;;
+            *) die "recipients: not a did: or ecdsa-sha2-nistp256 line: $line" ;;
+        esac
+    done <recipients
+    [ ${#recipient_opts[@]} -gt 0 ] || die "recipients lists no one: add your DID or SSH public key"
+}
+
+case "${1:-}" in
+    decrypt)
+        [ -f secret.env.cdoc2 ] || die "secret.env.cdoc2 not found"
+        [ ! -e secret.env ] || die "secret.env already exists. If its changes are encrypted, delete it first"
+        [ -n "${SSH_AUTH_SOCK:-}" ] || die "SSH_AUTH_SOCK is not set: start ssh-agent (or log in with ssh -A)"
+        # cdoc2-cli doesn't overwrite files and writes them with the default mode, so decrypt into a private
+        # directory first
+        tmp="$(mktemp -d .decrypt.XXXXXX)"
+        trap 'rm -rf "$tmp"' EXIT
+        cli decrypt --ssh-agent -f secret.env.cdoc2 -o "$tmp"
+        chmod 600 "$tmp/secret.env"
+        mv "$tmp/secret.env" secret.env
+        echo "decrypted to secret.env (ignored by git)"
+        ;;
+    encrypt)
+        [ -f secret.env ] || die "secret.env not found: ./ruhnu decrypt first, or cp secret.env.example secret.env"
+        read_recipients
+        rm -f .secret.env.cdoc2.new
+        trap 'rm -f .secret.env.cdoc2.new' EXIT
+        cli create "${recipient_opts[@]}" -f .secret.env.cdoc2.new secret.env
+        mv .secret.env.cdoc2.new secret.env.cdoc2
+        echo "encrypted to secret.env.cdoc2: commit and push it. secret.env is still here (ignored by git)."
+        ;;
+    info)
+        [ -f secret.env.cdoc2 ] || die "secret.env.cdoc2 not found"
+        cli info -f secret.env.cdoc2
+        ;;
+    *)
+        sed -n '2,8s/^# \{0,1\}//p' "$0" >&2
+        exit 2
+        ;;
+esac

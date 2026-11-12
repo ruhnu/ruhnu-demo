@@ -1,0 +1,54 @@
+# toy-deploy: nginx serves a page built from secrets that are committed only encrypted (secret.env.cdoc2).
+#
+# `docker compose up -d` first decrypts them through the ssh-agent of whoever runs it (forwarded with ssh -A),
+# into a tmpfs volume. The web server starts only after the decryption has succeeded. The plaintext is only
+# in memory: after `docker compose down` or a reboot, starting again needs a key holder's agent.
+name: toy-deploy
+
+services:
+  # Keeps the tmpfs volume mounted. A tmpfs volume loses its files as soon as no running container mounts
+  # it, which would happen between the end of "decrypt" and the start of "web".
+  secrets-holder:
+    image: nginx:alpine
+    entrypoint: ["sleep", "infinity"]
+    init: true
+    volumes:
+      - secrets:/secrets
+
+  # One-shot: secret.env.cdoc2 -> /secrets/secret.env. Runs as root in the container: ssh-agent accepts root
+  # as a client, and so does the socket sshd creates for a forwarded agent.
+  decrypt:
+    image: ${RUHNU_CLI_IMAGE:-ghcr.io/ruhnu/ruhnu-cli:latest}
+    entrypoint: ["sh", "/toy/ruhnu-cli/decrypt-secrets.sh"]
+    environment:
+      SSH_AUTH_SOCK: /ssh-agent.sock
+    volumes:
+      # without SSH_AUTH_SOCK, /dev/null is mounted and decrypt-secrets.sh explains what's missing
+      - type: bind
+        source: ${SSH_AUTH_SOCK:-/dev/null}
+        target: /ssh-agent.sock
+      - .:/toy:ro
+      - secrets:/secrets
+    depends_on:
+      - secrets-holder
+
+  web:
+    image: nginx:alpine
+    ports:
+      # localhost only: open it through an SSH tunnel (ssh -L 8088:localhost:8088 ...)
+      - "127.0.0.1:${TOY_PORT:-8088}:80"
+    volumes:
+      - secrets:/run/secrets:ro
+      - ./web/render-page.sh:/docker-entrypoint.d/40-render-page.sh:ro
+    tmpfs:
+      - /usr/share/nginx/html
+    depends_on:
+      decrypt:
+        condition: service_completed_successfully
+
+volumes:
+  secrets:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,mode=0700

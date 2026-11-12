@@ -1,0 +1,10 @@
+# Who can decrypt secret.env.cdoc2, one per line. ./ruhnu encrypt reads this file; run it again after a change.
+#
+#   did:web:<username>.github.io     a DID whose document lists your P-256 key (../live/README.md,
+#                                    section 4). Its shares live 3 years, and you revoke access by removing
+#                                    the key from the document.
+#   ecdsa-sha2-nistp256 AAAA... you  an SSH public key (a .pub line). Its shares live at most 14 days on the
+#                                    live servers: re-encrypt before then, or the committed file can't be
+#                                    decrypted any more.
+#
+# Only P-256 keys work, not Ed25519 or RSA.
