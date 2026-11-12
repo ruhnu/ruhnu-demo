@@ -30,7 +30,7 @@ agent is not touched.
 
 - Java 21, Maven, Docker (the user can run `docker` without sudo), OpenSSH client (`ssh-agent`, `ssh-add`,
   `ssh-keygen`)
-- these repositories next to `ruhnu-demo`, on branch `feat/add-did-recipient` (`DEMO_BRANCH` to check for
+- these repositories next to `ruhnu-demo`, on branch `ruhnu` (`DEMO_BRANCH` to check for
   another branch): `cdoc2-openapi`, `cdoc2-auth`, `cdoc2-java-ref-impl`, `cdoc2-shares-server`.
   Set `WORKSPACE` if they are somewhere else.
 - python3 and openssl, for the DID documents and the DID host's TLS files

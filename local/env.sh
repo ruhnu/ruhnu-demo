@@ -2,7 +2,7 @@
 
 DEMO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # repositories are expected next to ruhnu-demo, on branch $DEMO_BRANCH
-DEMO_BRANCH="${DEMO_BRANCH:-feat/add-did-recipient}"
+DEMO_BRANCH="${DEMO_BRANCH:-ruhnu}"
 WORKSPACE="${WORKSPACE:-$(cd "$DEMO_DIR/../.." && pwd)}"
 SHARES_SERVER_REPO="$WORKSPACE/cdoc2-shares-server"
 REF_IMPL_REPO="$WORKSPACE/cdoc2-java-ref-impl"
